@@ -360,12 +360,9 @@
 
 <main>
 
-  <!-- Tabs -->
-  <div class="filter-tabs" role="tablist" aria-label="Filtrar por mes">
-    <button class="tab active" data-filter="all"     role="tab">Todos</button>
-    <button class="tab"        data-filter="2"       role="tab">Febrero</button>
-    <button class="tab"        data-filter="3"       role="tab">Marzo</button>
-    <button class="tab"        data-filter="4"       role="tab">Abril</button>
+  <!-- Tabs (dinámicos: se generan según los meses con datos) -->
+  <div class="filter-tabs" id="filter-tabs" role="tablist" aria-label="Filtrar por mes">
+    <button class="tab active" data-filter="all" role="tab">Todos</button>
   </div>
 
   <!-- KPIs -->
@@ -532,12 +529,20 @@
     'Recubiertos':               'rgba(249,115,22,0.75)',
     'Prensas Manuales':          'rgba(34,197,94,0.75)'
   }
-  const MONTH_NAMES = { '02': 'Febrero', '03': 'Marzo', '04': 'Abril' }
-  const FILTER_RANGES = {
-    all: { start: '2026-02-01', end: '2026-04-30' },
-    '2': { start: '2026-02-01', end: '2026-02-28' },
-    '3': { start: '2026-03-01', end: '2026-03-31' },
-    '4': { start: '2026-04-01', end: '2026-04-30' }
+  const MONTH_NAMES = {
+    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+    '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+    '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+  }
+  const MONTH_END_DAY = {
+    '01':'31','02':'28','03':'31','04':'30','05':'31','06':'30',
+    '07':'31','08':'31','09':'30','10':'31','11':'30','12':'31'
+  }
+  // "Todos" cubre el año completo; por mes se calcula dinámicamente
+  function getRange(filter) {
+    if (filter === 'all') return { start: '2026-01-01', end: '2026-12-31' }
+    const m = String(filter).padStart(2, '0')
+    return { start: `2026-${m}-01`, end: `2026-${m}-${MONTH_END_DAY[m]}` }
   }
 
   // ── State ─────────────────────────────────────────────────
@@ -560,16 +565,46 @@
     try {
       supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
       initCharts()
-      loadData()
+      refreshMonthTabs().then(loadData)
     } catch (e) {
       showStatus('Error al inicializar Supabase: ' + e.message, 'error')
     }
   }
 
+  // ── Tabs dinámicas ────────────────────────────────────────
+  async function refreshMonthTabs() {
+    const { data, error } = await supabase
+      .from('registros_mantenimiento')
+      .select('fecha')
+      .order('fecha', { ascending: true })
+
+    if (error || !data) return
+
+    const months = [...new Set(data.map(r => r.fecha.slice(0, 7)))].sort()
+    const container = document.getElementById('filter-tabs')
+    let html = `<button class="tab ${currentFilter === 'all' ? 'active' : ''}" data-filter="all" role="tab">Todos</button>`
+    for (const ym of months) {
+      const monNum = ym.split('-')[1]
+      const filterKey = String(parseInt(monNum, 10))
+      const isActive = currentFilter === filterKey
+      html += `<button class="tab ${isActive ? 'active' : ''}" data-filter="${filterKey}" role="tab">${MONTH_NAMES[monNum] || monNum}</button>`
+    }
+    container.innerHTML = html
+
+    container.querySelectorAll('.tab').forEach(tab =>
+      tab.addEventListener('click', () => {
+        container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+        tab.classList.add('active')
+        currentFilter = tab.dataset.filter
+        loadData()
+      })
+    )
+  }
+
   // ── Data loading ──────────────────────────────────────────
   async function loadData() {
     showStatus('Cargando datos...', 'loading')
-    const range = FILTER_RANGES[currentFilter]
+    const range = getRange(currentFilter)
 
     const { data, error } = await supabase
       .from('registros_mantenimiento')
@@ -924,6 +959,7 @@
       e.target.reset()
       pctPreview.textContent = '—'
       pctPreview.className   = 'pct-preview'
+      await refreshMonthTabs()
       loadData()
     }
   })
@@ -954,23 +990,16 @@
     const csv  = [headers, ...csvRows].map(row => row.join(',')).join('\r\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
-    const a    = Object.assign(document.createElement('a'), {
+    const monKey = currentFilter === 'all'
+      ? 'todos'
+      : (MONTH_NAMES[String(currentFilter).padStart(2, '0')] || currentFilter).toLowerCase()
+    const a = Object.assign(document.createElement('a'), {
       href: url,
-      download: `mantenimiento_${currentFilter === 'all' ? 'feb-abr' : (MONTH_NAMES['0' + currentFilter] || currentFilter).toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`
+      download: `mantenimiento_${monKey}_${new Date().toISOString().slice(0, 10)}.csv`
     })
     a.click()
     URL.revokeObjectURL(url)
   })
-
-  // ── Tabs ──────────────────────────────────────────────────
-  document.querySelectorAll('.tab').forEach(tab =>
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
-      tab.classList.add('active')
-      currentFilter = tab.dataset.filter
-      loadData()
-    })
-  )
 
   // ── Helpers ───────────────────────────────────────────────
   function n(v) { return v != null ? +v : 0 }
