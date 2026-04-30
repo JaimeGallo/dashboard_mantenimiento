@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Mantenimiento Industrial</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #F1F5F9;
+      --surface: #FFFFFF;
+      --border: #E2E8F0;
+      --text: #1E293B;
+      --muted: #64748B;
+      --bando: #3B82F6;
+      --bando-bg: rgba(59,130,246,0.12);
+      --recub: #F97316;
+      --recub-bg: rgba(249,115,22,0.12);
+      --manuales: #22C55E;
+      --manuales-bg: rgba(34,197,94,0.12);
+      --alert: #EF4444;
+      --success: #10B981;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ── Header ─────────────────────────────── */
+    header {
+      background: #0F172A;
+      color: white;
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border-bottom: 2px solid #3B82F6;
+    }
+    .header-icon { font-size: 1.75rem; }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+    header p  { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; }
+
+    /* ── Status bar ─────────────────────────── */
+    #status-bar {
+      padding: 0.5rem 2rem;
+      font-size: 0.8rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    #status-bar.loading {
+      display: flex;
+      background: #EFF6FF;
+      color: #1D4ED8;
+      border-bottom: 1px solid #BFDBFE;
+    }
+    #status-bar.error {
+      display: flex;
+      background: #FEF2F2;
+      color: #991B1B;
+      border-bottom: 1px solid #FECACA;
+    }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Main layout ────────────────────────── */
+    main { max-width: 1400px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+
+    /* ── Tabs ───────────────────────────────── */
+    .filter-tabs {
+      display: flex;
+      gap: 0.375rem;
+      margin-bottom: 1.25rem;
+      background: white;
+      padding: 0.3rem;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      width: fit-content;
+      border: 1px solid var(--border);
+    }
+    .tab {
+      padding: 0.45rem 1.1rem;
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .tab.active { background: #0F172A; color: white; }
+    .tab:hover:not(.active) { background: var(--bg); color: var(--text); }
+
+    /* ── KPI grid ───────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+    .kpi-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.125rem 1.25rem;
+      box-shadow: var(--shadow);
+      border-top: 3px solid transparent;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card.bando    { border-top-color: var(--bando); }
+    .kpi-card.recub    { border-top-color: var(--recub); }
+    .kpi-card.manuales { border-top-color: var(--manuales); }
+    .kpi-card.dias     { border-top-color: var(--alert); }
+    .kpi-card.neutral  { border-top-color: #94A3B8; }
+
+    .kpi-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      line-height: 1.3;
+    }
+    .kpi-value {
+      font-size: 1.75rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    .kpi-value.good { color: var(--success); }
+    .kpi-value.bad  { color: var(--alert); }
+    .kpi-value.neutral { color: var(--text); }
+    .kpi-sub {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 0.375rem;
+      line-height: 1.4;
+    }
+
+    /* ── Charts ─────────────────────────────── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .chart-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    .chart-card.full-width { grid-column: 1 / -1; }
+    .chart-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    .chart-wrap { position: relative; }
+    .chart-wrap.tall   { height: 280px; }
+    .chart-wrap.medium { height: 240px; }
+
+    /* ── Section card ───────────────────────── */
+    .section-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .section-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* ── Form ───────────────────────────────── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.875rem;
+      align-items: end;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.3rem;
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 0.55rem 0.7rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: var(--text);
+      background: white;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      appearance: auto;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--bando);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    }
+
+    .pct-preview {
+      padding: 0.55rem 0.7rem;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      text-align: center;
+      color: var(--muted);
+      letter-spacing: -0.02em;
+      transition: all 0.15s;
+    }
+    .pct-preview.good { color: var(--success); border-color: var(--success); background: #F0FDF4; }
+    .pct-preview.bad  { color: var(--alert);   border-color: var(--alert);   background: #FEF2F2; }
+
+    .btn {
+      padding: 0.55rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary   { background: #0F172A; color: white; }
+    .btn-primary:hover   { background: #1E293B; }
+    .btn-secondary { background: white; color: var(--text); border: 1.5px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+
+    .form-feedback {
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 8px;
+      font-size: 0.825rem;
+      display: none;
+      font-weight: 500;
+    }
+    .form-feedback.success { display: block; background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0; }
+    .form-feedback.error   { display: block; background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+
+    /* ── Table ──────────────────────────────── */
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.825rem; }
+    thead th {
+      text-align: left;
+      padding: 0.5rem 0.875rem;
+      border-bottom: 2px solid var(--border);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+    tbody td { padding: 0.5rem 0.875rem; }
+
+    .pct-badge {
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .pct-badge.good { background: #F0FDF4; color: #15803D; }
+    .pct-badge.bad  { background: #FEF2F2; color: #B91C1C; }
+    .pct-badge.warn { background: #FFFBEB; color: #92400E; }
+
+    .line-badge {
+      padding: 0.18rem 0.55rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .line-badge.bando    { background: #EFF6FF; color: #1D4ED8; }
+    .line-badge.recub    { background: #FFF7ED; color: #C2410C; }
+    .line-badge.manuales { background: #F0FDF4; color: #15803D; }
+
+    /* ── Responsive ─────────────────────────── */
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 768px) {
+      main { padding: 1rem; }
+      header { padding: 1rem; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-card.full-width { grid-column: 1; }
+      .form-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-icon">⚙️</div>
+  <div>
+    <h1>Dashboard Mantenimiento Industrial</h1>
+    <p>Indicadores KPI · Tiempo de mantenimiento vs producción · Meta 2.5%</p>
+  </div>
+</header>
+
+<div id="status-bar">
+  <div class="spinner"></div>
+  <span id="status-msg">Cargando datos...</span>
+</div>
+
+<main>
+
+  <!-- Tabs -->
+  <div class="filter-tabs" role="tablist" aria-label="Filtrar por mes">
+    <button class="tab active" data-filter="all"     role="tab">Todos</button>
+    <button class="tab"        data-filter="2"       role="tab">Febrero</button>
+    <button class="tab"        data-filter="3"       role="tab">Marzo</button>
+    <button class="tab"        data-filter="4"       role="tab">Abril</button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card bando">
+      <div class="kpi-label">% Global<br>Prensas Bando</div>
+      <div class="kpi-value neutral" id="kpi-bando">—</div>
+      <div class="kpi-sub" id="kpi-bando-sub">—</div>
+    </div>
+    <div class="kpi-card recub">
+      <div class="kpi-label">% Global<br>Recubiertos</div>
+      <div class="kpi-value neutral" id="kpi-recub">—</div>
+      <div class="kpi-sub" id="kpi-recub-sub">—</div>
+    </div>
+    <div class="kpi-card manuales">
+      <div class="kpi-label">% Global<br>Prensas Manuales</div>
+      <div class="kpi-value neutral" id="kpi-manuales">—</div>
+      <div class="kpi-sub" id="kpi-manuales-sub">—</div>
+    </div>
+    <div class="kpi-card dias">
+      <div class="kpi-label">Días sobre<br>meta (&gt;2.5%)</div>
+      <div class="kpi-value neutral" id="kpi-dias">—</div>
+      <div class="kpi-sub">días con alguna línea crítica</div>
+    </div>
+    <div class="kpi-card neutral">
+      <div class="kpi-label">Peor día<br>registrado</div>
+      <div class="kpi-value neutral" id="kpi-peor-pct">—</div>
+      <div class="kpi-sub" id="kpi-peor-info">—</div>
+    </div>
+    <div class="kpi-card neutral">
+      <div class="kpi-label">Total horas<br>paradas</div>
+      <div class="kpi-value neutral" id="kpi-horas">—</div>
+      <div class="kpi-sub">exec + espera acumulado</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+
+    <div class="chart-card full-width">
+      <div class="chart-title">% Mantenimiento diario por línea — meta 2.5% (línea roja)</div>
+      <div class="chart-wrap tall">
+        <canvas id="chart-linea"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Tiempo total parado por mes (min exec + espera)</div>
+      <div class="chart-wrap medium">
+        <canvas id="chart-barras"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Distribución ejecución vs espera por línea</div>
+      <div class="chart-wrap medium">
+        <canvas id="chart-dona"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Form -->
+  <div class="section-card">
+    <div class="section-title">Registrar / actualizar dato</div>
+    <form id="form-registro" novalidate>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="f-fecha">Fecha</label>
+          <input type="date" id="f-fecha" required>
+        </div>
+        <div class="form-group">
+          <label for="f-linea">Línea</label>
+          <select id="f-linea" required>
+            <option value="">— Seleccionar —</option>
+            <option value="Prensas Automáticas Bando">Prensas Automáticas Bando</option>
+            <option value="Recubiertos">Recubiertos</option>
+            <option value="Prensas Manuales">Prensas Manuales</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="f-exec">Ejecución (min)</label>
+          <input type="number" id="f-exec" min="0" step="0.1" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label for="f-wait">Espera (min)</label>
+          <input type="number" id="f-wait" min="0" step="0.1" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label for="f-prod">Producción (min)</label>
+          <input type="number" id="f-prod" min="0" step="1" placeholder="480">
+        </div>
+        <div class="form-group">
+          <label>% Mto (vista previa)</label>
+          <div class="pct-preview" id="pct-preview">—</div>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <button type="submit" class="btn btn-primary" style="width:100%;" id="btn-save">
+            Guardar
+          </button>
+        </div>
+      </div>
+      <div class="form-feedback" id="form-feedback"></div>
+    </form>
+  </div>
+
+  <!-- Table -->
+  <div class="section-card">
+    <div class="table-header">
+      <div class="section-title" style="border:0;margin:0;padding:0;">
+        Últimos 50 registros del período
+      </div>
+      <button class="btn btn-secondary" id="btn-export">⬇ Exportar CSV</button>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Línea</th>
+            <th>Ejecución (min)</th>
+            <th>Espera (min)</th>
+            <th>Producción (min)</th>
+            <th>% Mto</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr>
+            <td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">
+              Cargando...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+  import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js'
+
+  // ── Constants ──────────────────────────────────────────────
+  const META = 2.5
+  const LINES = ['Prensas Automáticas Bando', 'Recubiertos', 'Prensas Manuales']
+  const LINE_KEY = {
+    'Prensas Automáticas Bando': 'bando',
+    'Recubiertos': 'recub',
+    'Prensas Manuales': 'manuales'
+  }
+  const COLORS = {
+    'Prensas Automáticas Bando': '#3B82F6',
+    'Recubiertos':               '#F97316',
+    'Prensas Manuales':          '#22C55E'
+  }
+  const COLORS_FILL = {
+    'Prensas Automáticas Bando': 'rgba(59,130,246,0.10)',
+    'Recubiertos':               'rgba(249,115,22,0.10)',
+    'Prensas Manuales':          'rgba(34,197,94,0.10)'
+  }
+  const COLORS_BAR = {
+    'Prensas Automáticas Bando': 'rgba(59,130,246,0.75)',
+    'Recubiertos':               'rgba(249,115,22,0.75)',
+    'Prensas Manuales':          'rgba(34,197,94,0.75)'
+  }
+  const MONTH_NAMES = { '02': 'Febrero', '03': 'Marzo', '04': 'Abril' }
+  const FILTER_RANGES = {
+    all: { start: '2026-02-01', end: '2026-04-30' },
+    '2': { start: '2026-02-01', end: '2026-02-28' },
+    '3': { start: '2026-03-01', end: '2026-03-31' },
+    '4': { start: '2026-04-01', end: '2026-04-30' }
+  }
+
+  // ── State ─────────────────────────────────────────────────
+  let currentFilter = 'all'
+  let allData = []
+  let lineChart, barChart, donutChart
+  let supabase
+
+  // ── DOM refs ──────────────────────────────────────────────
+  const statusBar  = document.getElementById('status-bar')
+  const statusMsg  = document.getElementById('status-msg')
+  const formFeedback = document.getElementById('form-feedback')
+  const pctPreview   = document.getElementById('pct-preview')
+  const btnSave      = document.getElementById('btn-save')
+
+  // ── Boot ──────────────────────────────────────────────────
+  if (SUPABASE_URL === 'TU_URL_AQUI' || !SUPABASE_URL) {
+    showStatus('⚠️  Configura tus credenciales de Supabase en config.js antes de usar el dashboard.', 'error')
+  } else {
+    try {
+      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      initCharts()
+      loadData()
+    } catch (e) {
+      showStatus('Error al inicializar Supabase: ' + e.message, 'error')
+    }
+  }
+
+  // ── Data loading ──────────────────────────────────────────
+  async function loadData() {
+    showStatus('Cargando datos...', 'loading')
+    const range = FILTER_RANGES[currentFilter]
+
+    const { data, error } = await supabase
+      .from('registros_mantenimiento')
+      .select('*')
+      .gte('fecha', range.start)
+      .lte('fecha', range.end)
+      .order('fecha', { ascending: true })
+      .order('linea',  { ascending: true })
+
+    if (error) {
+      showStatus('Error al cargar datos: ' + error.message, 'error')
+      return
+    }
+
+    hideStatus()
+    allData = data || []
+    updateKPIs(allData)
+    updateCharts(allData)
+    renderTable(allData)
+  }
+
+  // ── KPIs ──────────────────────────────────────────────────
+  function updateKPIs(data) {
+    const kpiMap = [
+      ['bando',    'Prensas Automáticas Bando'],
+      ['recub',    'Recubiertos'],
+      ['manuales', 'Prensas Manuales']
+    ]
+
+    for (const [key, linea] of kpiMap) {
+      const ld = data.filter(r => r.linea === linea)
+      const el  = document.getElementById(`kpi-${key}`)
+      const sub = document.getElementById(`kpi-${key}-sub`)
+
+      if (!ld.length) {
+        el.textContent = '—'
+        el.className   = 'kpi-value neutral'
+        sub.textContent = 'sin datos'
+        continue
+      }
+
+      const totEW  = ld.reduce((s, r) => s + n(r.exec_min) + n(r.wait_min), 0)
+      const totProd = ld.reduce((s, r) => s + n(r.prod_min), 0)
+      const pct = totProd > 0 ? totEW / totProd * 100 : null
+
+      if (pct === null) {
+        el.textContent = '—'
+        el.className   = 'kpi-value neutral'
+      } else {
+        el.textContent = pct.toFixed(2) + '%'
+        el.className   = `kpi-value ${pct > META ? 'bad' : 'good'}`
+      }
+      sub.textContent = `${ld.length} días registrados`
+    }
+
+    // Days over meta & worst day
+    const byDate = groupBy(data, 'fecha')
+    let diasSobre = 0
+    let peorPct = 0
+    let peorRecord = null
+
+    for (const [fecha, recs] of Object.entries(byDate)) {
+      let anyOver = false
+      for (const r of recs) {
+        const pct = r.pct_mto != null ? +r.pct_mto : null
+        if (pct != null && pct > META) anyOver = true
+        if (pct != null && pct > peorPct) {
+          peorPct = pct
+          peorRecord = r
+        }
+      }
+      if (anyOver) diasSobre++
+    }
+
+    document.getElementById('kpi-dias').textContent = diasSobre
+
+    if (peorRecord) {
+      document.getElementById('kpi-peor-pct').textContent = peorPct.toFixed(2) + '%'
+      document.getElementById('kpi-peor-info').textContent =
+        `${fmtDate(peorRecord.fecha)} · ${shortLine(peorRecord.linea)}`
+    } else {
+      document.getElementById('kpi-peor-pct').textContent = '—'
+      document.getElementById('kpi-peor-info').textContent = '—'
+    }
+
+    const totalMin = data.reduce((s, r) => s + n(r.exec_min) + n(r.wait_min), 0)
+    document.getElementById('kpi-horas').textContent = (totalMin / 60).toFixed(1) + ' h'
+  }
+
+  // ── Charts init ───────────────────────────────────────────
+  function initCharts() {
+    const baseOpts = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 }
+    }
+
+    // Line chart
+    lineChart = new Chart(document.getElementById('chart-linea'), {
+      type: 'line',
+      data: { labels: [], datasets: [] },
+      options: {
+        ...baseOpts,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                if (ctx.dataset.label === 'Meta 2.5%') return null
+                const v = ctx.parsed.y
+                return v != null ? ` ${ctx.dataset.label}: ${v.toFixed(2)}%` : null
+              }
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 22, font: { size: 10 } } },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: '% Mto', font: { size: 11 } },
+            ticks: { callback: v => v.toFixed(1) + '%', font: { size: 10 } }
+          }
+        }
+      }
+    })
+
+    // Bar chart
+    barChart = new Chart(document.getElementById('chart-barras'), {
+      type: 'bar',
+      data: { labels: [], datasets: [] },
+      options: {
+        ...baseOpts,
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, font: { size: 11 } } },
+          tooltip: {
+            callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(0)} min` }
+          }
+        },
+        scales: {
+          x: { ticks: { font: { size: 11 } } },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Minutos', font: { size: 11 } },
+            ticks: { font: { size: 10 } }
+          }
+        }
+      }
+    })
+
+    // Donut chart
+    donutChart = new Chart(document.getElementById('chart-dona'), {
+      type: 'doughnut',
+      data: { labels: [], datasets: [] },
+      options: {
+        ...baseOpts,
+        plugins: {
+          legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0)
+                const pct = total > 0 ? (ctx.parsed / total * 100).toFixed(1) : 0
+                return ` ${ctx.label}: ${ctx.parsed.toFixed(0)} min (${pct}%)`
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+
+  // ── Charts update ─────────────────────────────────────────
+  function updateCharts(data) {
+    updateLineChart(data)
+    updateBarChart(data)
+    updateDonutChart(data)
+  }
+
+  function updateLineChart(data) {
+    const dates = [...new Set(data.map(r => r.fecha))].sort()
+
+    const datasets = LINES.map(line => {
+      const byDate = {}
+      data.filter(r => r.linea === line).forEach(r => {
+        byDate[r.fecha] = r.pct_mto != null ? +r.pct_mto : null
+      })
+      return {
+        label: line,
+        data: dates.map(d => byDate[d] ?? null),
+        borderColor: COLORS[line],
+        backgroundColor: COLORS_FILL[line],
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        fill: false,
+        spanGaps: false,
+        borderWidth: 2
+      }
+    })
+
+    // Meta reference line
+    datasets.push({
+      label: 'Meta 2.5%',
+      data: dates.map(() => META),
+      borderColor: '#EF4444',
+      borderDash: [7, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      fill: false,
+      tension: 0,
+      order: 99
+    })
+
+    lineChart.data.labels   = dates.map(fmtDate)
+    lineChart.data.datasets = datasets
+    lineChart.update()
+  }
+
+  function updateBarChart(data) {
+    const months = [...new Set(data.map(r => r.fecha.slice(0, 7)))].sort()
+
+    const datasets = LINES.map(line => ({
+      label: line,
+      data: months.map(m => {
+        return data
+          .filter(r => r.linea === line && r.fecha.startsWith(m))
+          .reduce((s, r) => s + n(r.exec_min) + n(r.wait_min), 0)
+      }),
+      backgroundColor: COLORS_BAR[line],
+      borderColor: COLORS[line],
+      borderWidth: 1.5,
+      borderRadius: 4
+    }))
+
+    barChart.data.labels = months.map(m => {
+      const mon = m.split('-')[1]
+      return MONTH_NAMES[mon] || m
+    })
+    barChart.data.datasets = datasets
+    barChart.update()
+  }
+
+  function updateDonutChart(data) {
+    const labels = []
+    const values = []
+    const colors = []
+
+    for (const line of LINES) {
+      const ld = data.filter(r => r.linea === line)
+      const totExec = ld.reduce((s, r) => s + n(r.exec_min), 0)
+      const totWait = ld.reduce((s, r) => s + n(r.wait_min), 0)
+      const short = shortLine(line)
+      labels.push(`Exec · ${short}`, `Espera · ${short}`)
+      values.push(Math.round(totExec), Math.round(totWait))
+      colors.push(COLORS[line], COLORS[line] + 'AA') // AA ≈ 67% opacity
+    }
+
+    donutChart.data.labels = labels
+    donutChart.data.datasets = [{
+      data: values,
+      backgroundColor: colors,
+      borderWidth: 2,
+      borderColor: '#fff',
+      hoverOffset: 8
+    }]
+    donutChart.update()
+  }
+
+  // ── Table ─────────────────────────────────────────────────
+  function renderTable(data) {
+    const sorted = [...data]
+      .sort((a, b) => b.fecha.localeCompare(a.fecha) || a.linea.localeCompare(b.linea))
+      .slice(0, 50)
+
+    const tbody = document.getElementById('table-body')
+
+    if (!sorted.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">
+        Sin datos para el período seleccionado.</td></tr>`
+      return
+    }
+
+    tbody.innerHTML = sorted.map(r => {
+      const pct = r.pct_mto != null ? +r.pct_mto : null
+      let badgeClass = ''
+      if (pct != null) badgeClass = pct > 5 ? 'bad' : pct > META ? 'warn' : 'good'
+      const pctHtml = pct != null
+        ? `<span class="pct-badge ${badgeClass}">${pct.toFixed(2)}%</span>`
+        : '—'
+      const key = LINE_KEY[r.linea] || 'neutral'
+      return `<tr>
+        <td>${fmtDate(r.fecha)}</td>
+        <td><span class="line-badge ${key}">${r.linea}</span></td>
+        <td>${n(r.exec_min).toFixed(0)}</td>
+        <td>${n(r.wait_min).toFixed(0)}</td>
+        <td>${n(r.prod_min).toFixed(0)}</td>
+        <td>${pctHtml}</td>
+      </tr>`
+    }).join('')
+  }
+
+  // ── Form ──────────────────────────────────────────────────
+  ;['f-exec', 'f-wait', 'f-prod'].forEach(id =>
+    document.getElementById(id).addEventListener('input', updatePreview)
+  )
+
+  function updatePreview() {
+    const exec = parseFloat(document.getElementById('f-exec').value) || 0
+    const wait = parseFloat(document.getElementById('f-wait').value) || 0
+    const prod = parseFloat(document.getElementById('f-prod').value) || 0
+    if (prod > 0) {
+      const pct = (exec + wait) / prod * 100
+      pctPreview.textContent = pct.toFixed(2) + '%'
+      pctPreview.className   = 'pct-preview ' + (pct > META ? 'bad' : 'good')
+    } else {
+      pctPreview.textContent = '—'
+      pctPreview.className   = 'pct-preview'
+    }
+  }
+
+  document.getElementById('form-registro').addEventListener('submit', async e => {
+    e.preventDefault()
+    const fecha   = document.getElementById('f-fecha').value
+    const linea   = document.getElementById('f-linea').value
+    const execMin = parseFloat(document.getElementById('f-exec').value) || 0
+    const waitMin = parseFloat(document.getElementById('f-wait').value) || 0
+    const prodMin = parseFloat(document.getElementById('f-prod').value) || 0
+
+    if (!fecha || !linea) {
+      showFeedback('Por favor completa fecha y línea.', 'error')
+      return
+    }
+
+    btnSave.disabled    = true
+    btnSave.textContent = 'Guardando...'
+
+    const { error } = await supabase
+      .from('registros_mantenimiento')
+      .upsert(
+        { fecha, linea, exec_min: execMin, wait_min: waitMin, prod_min: prodMin },
+        { onConflict: 'fecha,linea' }
+      )
+
+    btnSave.disabled    = false
+    btnSave.textContent = 'Guardar'
+
+    if (error) {
+      showFeedback('Error al guardar: ' + error.message, 'error')
+    } else {
+      showFeedback('✓ Registro guardado correctamente.', 'success')
+      e.target.reset()
+      pctPreview.textContent = '—'
+      pctPreview.className   = 'pct-preview'
+      loadData()
+    }
+  })
+
+  function showFeedback(msg, type) {
+    formFeedback.textContent = msg
+    formFeedback.className   = `form-feedback ${type}`
+    setTimeout(() => { formFeedback.className = 'form-feedback' }, 5000)
+  }
+
+  // ── Export CSV ────────────────────────────────────────────
+  document.getElementById('btn-export').addEventListener('click', () => {
+    if (!allData.length) return
+
+    const sorted = [...allData].sort((a, b) =>
+      a.fecha.localeCompare(b.fecha) || a.linea.localeCompare(b.linea)
+    )
+    const headers = ['Fecha', 'Línea', 'Ejecución_min', 'Espera_min', 'Producción_min', 'Pct_Mto']
+    const csvRows = sorted.map(r => [
+      r.fecha,
+      `"${r.linea}"`,
+      n(r.exec_min).toFixed(2),
+      n(r.wait_min).toFixed(2),
+      n(r.prod_min).toFixed(2),
+      r.pct_mto != null ? (+r.pct_mto).toFixed(4) : ''
+    ])
+
+    const csv  = [headers, ...csvRows].map(row => row.join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = Object.assign(document.createElement('a'), {
+      href: url,
+      download: `mantenimiento_${currentFilter === 'all' ? 'feb-abr' : (MONTH_NAMES['0' + currentFilter] || currentFilter).toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`
+    })
+    a.click()
+    URL.revokeObjectURL(url)
+  })
+
+  // ── Tabs ──────────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(tab =>
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+      currentFilter = tab.dataset.filter
+      loadData()
+    })
+  )
+
+  // ── Helpers ───────────────────────────────────────────────
+  function n(v) { return v != null ? +v : 0 }
+
+  function groupBy(arr, key) {
+    return arr.reduce((acc, item) => {
+      const val = item[key]
+      if (!acc[val]) acc[val] = []
+      acc[val].push(item)
+      return acc
+    }, {})
+  }
+
+  function fmtDate(d) {
+    if (!d) return '—'
+    const [y, m, day] = d.split('-')
+    return `${day}/${m}/${y}`
+  }
+
+  function shortLine(line) {
+    if (line.includes('Bando'))    return 'Bando'
+    if (line.includes('Recub'))    return 'Recub.'
+    return 'Manuales'
+  }
+
+  function showStatus(msg, type) {
+    statusMsg.textContent = msg
+    statusBar.className   = type
+  }
+
+  function hideStatus() {
+    statusBar.className = ''
+    statusBar.style.display = 'none'
+  }
+</script>
+</body>
+</html>

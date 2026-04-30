@@ -1,0 +1,16 @@
+# NOTA: config.js SÍ se sube al repo porque GitHub Pages lo necesita.
+# La anon key de Supabase es pública por diseño y está protegida por RLS.
+# Si prefieres mantenerla privada, descomenta la línea siguiente:
+# config.js
+
+# Python y temporales
+__pycache__/
+*.py[cod]
+*.xlsx
+*.xlsm
+*.zip
+*.bat
+*.exe
+nul
+.DS_Store
+Thumbs.db
