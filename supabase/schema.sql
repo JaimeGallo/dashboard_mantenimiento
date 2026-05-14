@@ -40,14 +40,14 @@ ALTER TABLE registros_mantenimiento ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_insert"
   ON registros_mantenimiento
   FOR INSERT
-  TO anon
+  TO PUBLIC
   WITH CHECK (true);
 
--- Permitir UPDATE público (necesario para UPSERT)
+-- Permitir UPDATE público (necesario para UPSERT y soft delete)
 CREATE POLICY "public_update"
   ON registros_mantenimiento
   FOR UPDATE
-  TO anon
+  TO PUBLIC
   USING (true)
   WITH CHECK (true);
 
@@ -65,5 +65,16 @@ DROP POLICY IF EXISTS "public_select" ON registros_mantenimiento;
 CREATE POLICY "public_select"
   ON registros_mantenimiento
   FOR SELECT
-  TO anon
+  TO PUBLIC
   USING (deleted_at IS NULL);
+
+-- UPDATE debe permitir la fila *después* de archivar (deleted_at no NULL).
+-- Si public_update tenía WITH CHECK (deleted_at IS NULL), el soft delete fallaba con:
+-- "new row violates row-level security policy".
+DROP POLICY IF EXISTS "public_update" ON registros_mantenimiento;
+CREATE POLICY "public_update"
+  ON registros_mantenimiento
+  FOR UPDATE
+  TO PUBLIC
+  USING (true)
+  WITH CHECK (true);

@@ -589,12 +589,12 @@
 
 <div id="modal-delete" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
   <div class="modal-dialog">
-    <h2 id="modal-delete-title">Ocultar registro</h2>
-    <p>El registro dejará de mostrarse en el dashboard y en las exportaciones, pero <strong>no se borra</strong> de la base de datos (archivo / soft delete).</p>
+    <h2 id="modal-delete-title">Eliminar registro</h2>
+    <p>Este registro <strong>dejará de mostrarse</strong> en el dashboard, gráficas, indicadores y exportaciones. En la base de datos se conserva la fila (soft delete: se marca con fecha de borrado), no se pierde el histórico físico.</p>
     <p id="modal-delete-summary" style="font-size:0.875rem;font-weight:700;color:var(--text);margin-bottom:1.25rem;">—</p>
     <div class="modal-actions">
       <button type="button" class="btn btn-secondary" id="modal-delete-cancel">Cancelar</button>
-      <button type="button" class="btn btn-danger" id="modal-delete-confirm">Ocultar</button>
+      <button type="button" class="btn btn-danger" id="modal-delete-confirm">Eliminar</button>
     </div>
   </div>
 </div>
@@ -1017,7 +1017,7 @@
       const key = LINE_KEY[r.linea] || 'neutral'
       const rowId = r.id != null ? String(r.id) : ''
       const delBtn = rowId
-        ? `<button type="button" class="btn-delete-row" data-id="${rowId}" title="Ocultar registro (permanece en la base de datos)">Ocultar</button>`
+        ? `<button type="button" class="btn-delete-row" data-id="${rowId}" title="Eliminar de la vista (soft delete en base de datos)">Eliminar</button>`
         : '—'
       return `<tr>
         <td>${fmtDate(r.fecha)}</td>
@@ -1040,7 +1040,7 @@
       : `ID ${id}`
     modalDelete.hidden = false
     modalDeleteConfirm.disabled = false
-    modalDeleteConfirm.textContent = 'Ocultar'
+    modalDeleteConfirm.textContent = 'Eliminar'
     modalDeleteConfirm.focus()
   }
 
@@ -1068,7 +1068,7 @@
   modalDeleteConfirm.addEventListener('click', async () => {
     if (pendingDeleteId == null || !supabase) return
     modalDeleteConfirm.disabled = true
-    modalDeleteConfirm.textContent = 'Ocultando…'
+    modalDeleteConfirm.textContent = 'Eliminando…'
     const { error } = await supabase
       .from('registros_mantenimiento')
       .update({ deleted_at: new Date().toISOString() })
@@ -1076,8 +1076,8 @@
 
     if (error) {
       modalDeleteConfirm.disabled = false
-      modalDeleteConfirm.textContent = 'Ocultar'
-      alert('No se pudo archivar el registro: ' + error.message)
+      modalDeleteConfirm.textContent = 'Eliminar'
+      alert('No se pudo eliminar el registro: ' + error.message)
       return
     }
 
