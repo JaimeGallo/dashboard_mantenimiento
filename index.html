@@ -110,7 +110,7 @@
     /* ── KPI grid ───────────────────────────── */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 0.875rem;
       margin-bottom: 1.25rem;
     }
@@ -282,6 +282,13 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .table-header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
     .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
@@ -324,6 +331,75 @@
     .line-badge.bando    { background: #EFF6FF; color: #1D4ED8; }
     .line-badge.recub    { background: #FFF7ED; color: #C2410C; }
     .line-badge.manuales { background: #F0FDF4; color: #15803D; }
+
+    .btn-delete-row {
+      padding: 0.35rem 0.55rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border-radius: 6px;
+      border: 1px solid #FECACA;
+      background: white;
+      color: #991B1B;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .btn-delete-row:hover {
+      background: #FEF2F2;
+      border-color: #F87171;
+      color: #7F1D1D;
+    }
+    .btn-delete-row:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay[hidden] { display: none !important; }
+    .modal-dialog {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      padding: 1.25rem 1.5rem;
+    }
+    .modal-dialog h2 {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .modal-dialog p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 1.25rem;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .btn-danger {
+      background: #DC2626;
+      color: white;
+      border: none;
+    }
+    .btn-danger:hover:not(:disabled) { background: #B91C1C; }
+    .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
 
     /* ── Responsive ─────────────────────────── */
     @media (max-width: 1100px) {
@@ -396,6 +472,11 @@
       <div class="kpi-label">Total horas<br>paradas</div>
       <div class="kpi-value neutral" id="kpi-horas">—</div>
       <div class="kpi-sub">exec + espera acumulado</div>
+    </div>
+    <div class="kpi-card neutral">
+      <div class="kpi-label">% Tiempo total<br>mantenimiento</div>
+      <div class="kpi-value neutral" id="kpi-tiempo-total-mto">—</div>
+      <div class="kpi-sub" id="kpi-tiempo-total-mto-sub">exec + espera / producción total</div>
     </div>
   </div>
 
@@ -475,7 +556,10 @@
       <div class="section-title" style="border:0;margin:0;padding:0;">
         Últimos 50 registros del período
       </div>
-      <button class="btn btn-secondary" id="btn-export">⬇ Exportar CSV</button>
+      <div class="table-header-actions">
+        <button type="button" class="btn btn-secondary" id="btn-export-excel">⬇ Exportar Excel</button>
+        <button type="button" class="btn btn-secondary" id="btn-export">⬇ Exportar CSV</button>
+      </div>
     </div>
     <div class="table-wrapper">
       <table>
@@ -487,11 +571,12 @@
             <th>Espera (min)</th>
             <th>Producción (min)</th>
             <th>% Mto</th>
+            <th style="text-align:center;">Acciones</th>
           </tr>
         </thead>
         <tbody id="table-body">
           <tr>
-            <td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">
+            <td colspan="7" style="text-align:center;padding:2rem;color:var(--muted);">
               Cargando...
             </td>
           </tr>
@@ -501,6 +586,18 @@
   </div>
 
 </main>
+
+<div id="modal-delete" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
+  <div class="modal-dialog">
+    <h2 id="modal-delete-title">Ocultar registro</h2>
+    <p>El registro dejará de mostrarse en el dashboard y en las exportaciones, pero <strong>no se borra</strong> de la base de datos (archivo / soft delete).</p>
+    <p id="modal-delete-summary" style="font-size:0.875rem;font-weight:700;color:var(--text);margin-bottom:1.25rem;">—</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" id="modal-delete-cancel">Cancelar</button>
+      <button type="button" class="btn btn-danger" id="modal-delete-confirm">Ocultar</button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -557,6 +654,11 @@
   const formFeedback = document.getElementById('form-feedback')
   const pctPreview   = document.getElementById('pct-preview')
   const btnSave      = document.getElementById('btn-save')
+  const modalDelete  = document.getElementById('modal-delete')
+  const modalDeleteSummary = document.getElementById('modal-delete-summary')
+  const modalDeleteCancel  = document.getElementById('modal-delete-cancel')
+  const modalDeleteConfirm = document.getElementById('modal-delete-confirm')
+  let pendingDeleteId = null
 
   // ── Boot ──────────────────────────────────────────────────
   if (SUPABASE_URL === 'TU_URL_AQUI' || !SUPABASE_URL) {
@@ -576,6 +678,7 @@
     const { data, error } = await supabase
       .from('registros_mantenimiento')
       .select('fecha')
+      .is('deleted_at', null)
       .order('fecha', { ascending: true })
 
     if (error || !data) return
@@ -609,6 +712,7 @@
     const { data, error } = await supabase
       .from('registros_mantenimiento')
       .select('*')
+      .is('deleted_at', null)
       .gte('fecha', range.start)
       .lte('fecha', range.end)
       .order('fecha', { ascending: true })
@@ -692,6 +796,21 @@
 
     const totalMin = data.reduce((s, r) => s + n(r.exec_min) + n(r.wait_min), 0)
     document.getElementById('kpi-horas').textContent = (totalMin / 60).toFixed(1) + ' h'
+
+    // % Tiempo total mantenimiento (equivalente a fila 15 «Indicadores mantenimiento»: global)
+    const elTotMto = document.getElementById('kpi-tiempo-total-mto')
+    const subTotMto = document.getElementById('kpi-tiempo-total-mto-sub')
+    const totProdGlobal = data.reduce((s, r) => s + n(r.prod_min), 0)
+    const pctGlobalMto = totProdGlobal > 0 ? totalMin / totProdGlobal * 100 : null
+    if (pctGlobalMto === null || !data.length) {
+      elTotMto.textContent = '—'
+      elTotMto.className = 'kpi-value neutral'
+      subTotMto.textContent = data.length ? 'sin producción registrada' : 'sin datos'
+    } else {
+      elTotMto.textContent = pctGlobalMto.toFixed(2) + '%'
+      elTotMto.className = `kpi-value ${pctGlobalMto > META ? 'bad' : 'good'}`
+      subTotMto.textContent = 'exec + espera / producción total'
+    }
   }
 
   // ── Charts init ───────────────────────────────────────────
@@ -883,7 +1002,7 @@
     const tbody = document.getElementById('table-body')
 
     if (!sorted.length) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted);">
         Sin datos para el período seleccionado.</td></tr>`
       return
     }
@@ -896,6 +1015,10 @@
         ? `<span class="pct-badge ${badgeClass}">${pct.toFixed(2)}%</span>`
         : '—'
       const key = LINE_KEY[r.linea] || 'neutral'
+      const rowId = r.id != null ? String(r.id) : ''
+      const delBtn = rowId
+        ? `<button type="button" class="btn-delete-row" data-id="${rowId}" title="Ocultar registro (permanece en la base de datos)">Ocultar</button>`
+        : '—'
       return `<tr>
         <td>${fmtDate(r.fecha)}</td>
         <td><span class="line-badge ${key}">${r.linea}</span></td>
@@ -903,9 +1026,65 @@
         <td>${n(r.wait_min).toFixed(0)}</td>
         <td>${n(r.prod_min).toFixed(0)}</td>
         <td>${pctHtml}</td>
+        <td style="text-align:center;">${delBtn}</td>
       </tr>`
     }).join('')
   }
+
+  function openDeleteModal(id) {
+    if (!supabase) return
+    pendingDeleteId = id
+    const rec = allData.find(r => Number(r.id) === Number(id))
+    modalDeleteSummary.textContent = rec
+      ? `${fmtDate(rec.fecha)} · ${rec.linea}`
+      : `ID ${id}`
+    modalDelete.hidden = false
+    modalDeleteConfirm.disabled = false
+    modalDeleteConfirm.textContent = 'Ocultar'
+    modalDeleteConfirm.focus()
+  }
+
+  function closeDeleteModal() {
+    pendingDeleteId = null
+    modalDelete.hidden = true
+  }
+
+  document.getElementById('table-body').addEventListener('click', e => {
+    const btn = e.target.closest('.btn-delete-row')
+    if (!btn || !btn.dataset.id) return
+    openDeleteModal(btn.dataset.id)
+  })
+
+  modalDeleteCancel.addEventListener('click', closeDeleteModal)
+
+  modalDelete.addEventListener('click', e => {
+    if (e.target === modalDelete) closeDeleteModal()
+  })
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modalDelete.hidden) closeDeleteModal()
+  })
+
+  modalDeleteConfirm.addEventListener('click', async () => {
+    if (pendingDeleteId == null || !supabase) return
+    modalDeleteConfirm.disabled = true
+    modalDeleteConfirm.textContent = 'Ocultando…'
+    const { error } = await supabase
+      .from('registros_mantenimiento')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', pendingDeleteId)
+
+    if (error) {
+      modalDeleteConfirm.disabled = false
+      modalDeleteConfirm.textContent = 'Ocultar'
+      alert('No se pudo archivar el registro: ' + error.message)
+      return
+    }
+
+    closeDeleteModal()
+    await refreshMonthTabs()
+    loadData()
+  })
 
   // ── Form ──────────────────────────────────────────────────
   ;['f-exec', 'f-wait', 'f-prod'].forEach(id =>
@@ -945,7 +1124,7 @@
     const { error } = await supabase
       .from('registros_mantenimiento')
       .upsert(
-        { fecha, linea, exec_min: execMin, wait_min: waitMin, prod_min: prodMin },
+        { fecha, linea, exec_min: execMin, wait_min: waitMin, prod_min: prodMin, deleted_at: null },
         { onConflict: 'fecha,linea' }
       )
 
@@ -999,6 +1178,271 @@
     })
     a.click()
     URL.revokeObjectURL(url)
+  })
+
+  // ── Export Excel (misma estructura visual que docs/Indicadores mantenimiento.xlsx) ─
+  const XL_TITLE = 'TIEMPO PERDIDO POR PAROS DE MANTENIMIENTO' // + año + META (plantilla Office)
+  const XL_BORDER = { style: 'thin', color: { argb: 'FFD0D0D0' } }
+  const XL_FILL_TITLE = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF99CC00' } } // plantilla xf 114
+  const XL_FILL_DAYHDR = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } } // plantilla fila días
+  const XL_FILL_BANDO = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } } // bloque bando (tema verdoso)
+  const XL_FILL_RECUB = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } }
+  const XL_FILL_MAN = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } }
+  const XL_FILL_NOTE = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E2E2' } } // barra justificación
+  const XL_LBL_BANDO = 'Tiempo de ejecucion mantenimiento Prensas Automaticas Bando Aglomerados'
+  const XL_LBL_BANDO_W = 'Tiempo de espera mantenimiento Prensas Automatica Bando Aglomerados'
+  const XL_LBL_BANDO_P = 'Tiempo de produccion Prensas Automaticas Bando Aglomerados'
+  const XL_LBL_REC_W = 'Tiempo de espera mantenimento Recubiertos'
+  const XL_LBL_REC_E = 'Tiempo de ejecucion mantenimiento Recubiertos'
+  const XL_LBL_REC_P = 'Tiempo de produccion Recubiertos'
+  const XL_LBL_MAN_E = 'Tiempo de ejecucion mantenimiento Prensas Manuales Aglomerados'
+  const XL_LBL_MAN_W = 'Tiempo de espera mantenimiento Prensas Manuales Aglomerados'
+  const XL_LBL_MAN_P = 'Tiempo de produccion Prensas Manuales Aglomerados'
+  const XL_LBL_PCT_B = '%Tiempo total mantenimiento Prensas Automaticas Bando Aglomerados'
+  const XL_LBL_PCT_R = '%Tiempo total mantenimiento Recubiertos'
+  const XL_LBL_PCT_M = '%Tiempo total mantenimiento Prensas Manuales Aglomerados'
+  const XL_LBL_JUST = 'JUSTIFICACION DE PAROS PRENSAS BANDO AGLOMERADOS - RECUBIERTOS - PRENSAS MANUALES AGLOMERADOS'
+
+  function colToLetter(col1) {
+    let s = ''
+    let c = col1
+    while (c > 0) {
+      const m = (c - 1) % 26
+      s = String.fromCharCode(65 + m) + s
+      c = Math.floor((c - 1) / 26)
+    }
+    return s
+  }
+
+  function eachDateIso(startYmd, endYmd) {
+    const out = []
+    const d = new Date(startYmd + 'T12:00:00')
+    const end = new Date(endYmd + 'T12:00:00')
+    while (d <= end) {
+      out.push(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+    return out
+  }
+
+  function exportPeriodLabel() {
+    if (currentFilter === 'all') return 'Todos los meses · 2026'
+    const m = String(currentFilter).padStart(2, '0')
+    return `${MONTH_NAMES[m] || m} 2026`
+  }
+
+  document.getElementById('btn-export-excel').addEventListener('click', async () => {
+    if (!allData.length) return
+    const btn = document.getElementById('btn-export-excel')
+    const prev = btn.textContent
+    btn.disabled = true
+    btn.textContent = 'Generando…'
+    try {
+      const mod = await import('https://esm.sh/exceljs@4.4.0')
+      const ExcelJS = mod.default || mod
+      const wb = new ExcelJS.Workbook()
+      wb.creator = 'Dashboard Mantenimiento'
+
+      const range = getRange(currentFilter)
+      const dates = eachDateIso(range.start, range.end)
+      if (dates.length > 400) {
+        alert('El período tiene demasiados días para una sola hoja (>400). Acota el filtro por mes.')
+        return
+      }
+
+      const sorted = [...allData].sort((a, b) =>
+        a.fecha.localeCompare(b.fecha) || a.linea.localeCompare(b.linea)
+      )
+      const lookup = {}
+      for (const r of sorted) lookup[`${r.fecha}\t${r.linea}`] = r
+
+      const LB = 'Prensas Automáticas Bando'
+      const LR = 'Recubiertos'
+      const LM = 'Prensas Manuales'
+
+      const year = (range.start || '2026').slice(0, 4)
+      const lastCol = 1 + dates.length
+      const lastLet = colToLetter(lastCol)
+
+      const ws = wb.addWorksheet('Hoja1', {
+        views: [{ state: 'frozen', xSplit: 1, ySplit: 4, topLeftCell: 'B5', activeCell: 'B5' }]
+      })
+
+      ws.mergeCells(`A1:${lastLet}1`)
+      const t1 = ws.getCell('A1')
+      t1.value = `${XL_TITLE} ${year} - META ${META}%`
+      t1.font = { bold: true, size: 9, name: 'Tahoma', color: { argb: 'FF000000' } }
+      t1.fill = XL_FILL_TITLE
+      t1.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+      ws.getRow(1).height = 28
+
+      const now = new Date()
+      const expStr = now.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
+      ws.mergeCells(`A2:${lastLet}2`)
+      const t2 = ws.getCell('A2')
+      t2.value = `Exportado desde dashboard · ${exportPeriodLabel()} · ${expStr}`
+      t2.font = { size: 9, name: 'Calibri', color: { argb: 'FF44546A' } }
+      t2.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+      ws.getRow(2).height = 18
+
+      const r3 = ws.getRow(3)
+      r3.getCell(1).value = 'Variables/KPI'
+      r3.getCell(1).font = { bold: true, size: 9, name: 'Calibri' }
+      r3.getCell(1).fill = XL_FILL_DAYHDR
+      dates.forEach((iso, i) => {
+        const c = r3.getCell(2 + i)
+        const mon = iso.slice(5, 7)
+        c.value = (MONTH_NAMES[mon] || mon).slice(0, 3)
+        c.font = { bold: true, size: 9, name: 'Calibri' }
+        c.fill = XL_FILL_DAYHDR
+        c.alignment = { horizontal: 'center' }
+        c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+      })
+      r3.height = 16
+
+      const r4 = ws.getRow(4)
+      r4.getCell(1).value = 'Día'
+      r4.getCell(1).font = { bold: true, size: 9, name: 'Calibri' }
+      r4.getCell(1).fill = XL_FILL_DAYHDR
+      dates.forEach((iso, i) => {
+        const c = r4.getCell(2 + i)
+        c.value = +iso.slice(8, 10)
+        c.font = { size: 9, name: 'Calibri' }
+        c.fill = XL_FILL_DAYHDR
+        c.alignment = { horizontal: 'center' }
+        c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+      })
+      r4.height = 14
+
+      const R_BE = 5, R_BW = 6, R_BP = 7
+      const R_RW = 8, R_RE = 9, R_RP = 10
+      const R_ME = 11, R_MW = 12, R_MP = 13
+      const R_PCTB = 14, R_PCTR = 15, R_PCTM = 16
+
+      const blockRows = [
+        { r: R_BE, label: XL_LBL_BANDO, line: LB, field: 'exec_min', fill: XL_FILL_BANDO },
+        { r: R_BW, label: XL_LBL_BANDO_W, line: LB, field: 'wait_min', fill: XL_FILL_BANDO },
+        { r: R_BP, label: XL_LBL_BANDO_P, line: LB, field: 'prod_min', fill: XL_FILL_BANDO },
+        { r: R_RW, label: XL_LBL_REC_W, line: LR, field: 'wait_min', fill: XL_FILL_RECUB },
+        { r: R_RE, label: XL_LBL_REC_E, line: LR, field: 'exec_min', fill: XL_FILL_RECUB },
+        { r: R_RP, label: XL_LBL_REC_P, line: LR, field: 'prod_min', fill: XL_FILL_RECUB },
+        { r: R_ME, label: XL_LBL_MAN_E, line: LM, field: 'exec_min', fill: XL_FILL_MAN },
+        { r: R_MW, label: XL_LBL_MAN_W, line: LM, field: 'wait_min', fill: XL_FILL_MAN },
+        { r: R_MP, label: XL_LBL_MAN_P, line: LM, field: 'prod_min', fill: XL_FILL_MAN }
+      ]
+
+      for (const br of blockRows) {
+        const row = ws.getRow(br.r)
+        const a = row.getCell(1)
+        a.value = br.label
+        a.font = { bold: true, size: 9, name: 'Calibri' }
+        a.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+        a.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        dates.forEach((iso, i) => {
+          const rec = lookup[`${iso}\t${br.line}`]
+          const c = row.getCell(2 + i)
+          if (rec) c.value = n(rec[br.field])
+          else c.value = null
+          c.numFmt = '0.0'
+          c.alignment = { horizontal: 'right' }
+          c.fill = br.fill
+          c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        })
+        row.height = 22
+      }
+
+      const pctSpec = [
+        { r: R_PCTB, label: XL_LBL_PCT_B, e: R_BE, w: R_BW, p: R_BP, fill: XL_FILL_BANDO },
+        { r: R_PCTR, label: XL_LBL_PCT_R, e: R_RE, w: R_RW, p: R_RP, fill: XL_FILL_RECUB },
+        { r: R_PCTM, label: XL_LBL_PCT_M, e: R_ME, w: R_MW, p: R_MP, fill: XL_FILL_MAN }
+      ]
+      for (const pr of pctSpec) {
+        const row = ws.getRow(pr.r)
+        const a = row.getCell(1)
+        a.value = pr.label
+        a.font = { bold: true, size: 9, name: 'Calibri' }
+        a.alignment = { vertical: 'middle', wrapText: true }
+        a.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        dates.forEach((_, i) => {
+          const L = colToLetter(2 + i)
+          const c = row.getCell(2 + i)
+          c.value = { formula: `IF(${L}${pr.p}=0,"",(${L}${pr.e}+${L}${pr.w})/${L}${pr.p})` }
+          c.numFmt = '0.0%'
+          c.alignment = { horizontal: 'center' }
+          c.fill = pr.fill
+          c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        })
+        row.height = 22
+      }
+
+      const noteRow = 18
+      ws.mergeCells(`A${noteRow}:${lastLet}${noteRow}`)
+      const ncell = ws.getCell(`A${noteRow}`)
+      ncell.value = XL_LBL_JUST
+      ncell.font = { bold: true, size: 9, name: 'Calibri', color: { argb: 'FF000000' } }
+      ncell.fill = XL_FILL_NOTE
+      ncell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+      ws.getRow(noteRow).height = 36
+
+      ws.getColumn(1).width = 58
+      for (let c = 2; c <= lastCol; c++) ws.getColumn(c).width = 7.3
+
+      const ws2 = wb.addWorksheet('Registros', {
+        views: [{ state: 'frozen', ySplit: 2 }]
+      })
+      ws2.mergeCells('A1:F1')
+      ws2.getCell('A1').value = 'Detalle de registros (mismo período)'
+      ws2.getCell('A1').font = { bold: true, size: 10 }
+      ws2.getCell('A1').fill = XL_FILL_TITLE
+      const h2 = ws2.getRow(2)
+      ;['Fecha', 'Línea', 'Ejecución (min)', 'Espera (min)', 'Producción (min)', '% Mto'].forEach((h, i) => {
+        const c = h2.getCell(i + 1)
+        c.value = h
+        c.font = { bold: true, size: 9 }
+        c.fill = XL_FILL_DAYHDR
+        c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+      })
+      let rr = 3
+      for (const row of sorted) {
+        const xr = ws2.getRow(rr)
+        const pct = row.pct_mto != null ? +row.pct_mto : null
+        xr.getCell(1).value = new Date(row.fecha + 'T12:00:00')
+        xr.getCell(1).numFmt = 'dd/mm/yyyy'
+        xr.getCell(2).value = row.linea
+        xr.getCell(3).value = n(row.exec_min)
+        xr.getCell(4).value = n(row.wait_min)
+        xr.getCell(5).value = n(row.prod_min)
+        if (pct != null) {
+          xr.getCell(6).value = pct / 100
+          xr.getCell(6).numFmt = '0.00%'
+        }
+        ;[1, 2, 3, 4, 5, 6].forEach(ci =>
+          (xr.getCell(ci).border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }))
+        rr++
+      }
+      ws2.columns = [{ width: 12 }, { width: 36 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 10 }]
+
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = URL.createObjectURL(blob)
+      const monKey = currentFilter === 'all'
+        ? 'todos'
+        : (MONTH_NAMES[String(currentFilter).padStart(2, '0')] || currentFilter).toLowerCase()
+      const a = Object.assign(document.createElement('a'), {
+        href: url,
+        download: `Indicadores_mantenimiento_${monKey}_${now.toISOString().slice(0, 10)}.xlsx`
+      })
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      alert('No se pudo generar el Excel: ' + (e.message || e))
+    } finally {
+      btn.disabled = false
+      btn.textContent = prev
+    }
   })
 
   // ── Helpers ───────────────────────────────────────────────

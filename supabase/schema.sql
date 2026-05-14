@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS registros_mantenimiento (
                 ELSE NULL END
               ) STORED,
   creado_en   TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at  TIMESTAMPTZ NULL,
   UNIQUE(fecha, linea)
 );
 
@@ -35,13 +36,6 @@ CREATE INDEX IF NOT EXISTS idx_registros_linea
 
 ALTER TABLE registros_mantenimiento ENABLE ROW LEVEL SECURITY;
 
--- Permitir SELECT público (anon key)
-CREATE POLICY "public_select"
-  ON registros_mantenimiento
-  FOR SELECT
-  TO anon
-  USING (true);
-
 -- Permitir INSERT público
 CREATE POLICY "public_insert"
   ON registros_mantenimiento
@@ -56,3 +50,20 @@ CREATE POLICY "public_update"
   TO anon
   USING (true)
   WITH CHECK (true);
+
+-- Soft delete: archivar con UPDATE (deleted_at). No política DELETE.
+
+-- -----------------------------------------------------------------
+-- Migración proyectos ya creados (ejecutar si la tabla existía sin deleted_at)
+-- -----------------------------------------------------------------
+ALTER TABLE registros_mantenimiento
+  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
+
+DROP POLICY IF EXISTS "public_delete" ON registros_mantenimiento;
+
+DROP POLICY IF EXISTS "public_select" ON registros_mantenimiento;
+CREATE POLICY "public_select"
+  ON registros_mantenimiento
+  FOR SELECT
+  TO anon
+  USING (deleted_at IS NULL);
