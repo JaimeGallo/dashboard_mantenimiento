@@ -354,6 +354,31 @@
       cursor: not-allowed;
     }
 
+    .table-actions {
+      display: flex;
+      gap: 0.35rem;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn-edit-row {
+      padding: 0.35rem 0.55rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: white;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .btn-edit-row:hover {
+      background: #EFF6FF;
+      border-color: var(--bando);
+      color: #1D4ED8;
+    }
+
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -507,7 +532,7 @@
   </div>
 
   <!-- Form -->
-  <div class="section-card">
+  <div class="section-card" id="registro-form-section">
     <div class="section-title">Registrar / actualizar dato</div>
     <form id="form-registro" novalidate>
       <div class="form-grid">
@@ -1016,8 +1041,11 @@
         : '—'
       const key = LINE_KEY[r.linea] || 'neutral'
       const rowId = r.id != null ? String(r.id) : ''
-      const delBtn = rowId
-        ? `<button type="button" class="btn-delete-row" data-id="${rowId}" title="Eliminar de la vista (soft delete en base de datos)">Eliminar</button>`
+      const actionBtns = rowId
+        ? `<div class="table-actions">
+            <button type="button" class="btn-edit-row" data-id="${rowId}" title="Cargar en el formulario para editar">Editar</button>
+            <button type="button" class="btn-delete-row" data-id="${rowId}" title="Eliminar de la vista (soft delete en base de datos)">Eliminar</button>
+          </div>`
         : '—'
       return `<tr>
         <td>${fmtDate(r.fecha)}</td>
@@ -1026,7 +1054,7 @@
         <td>${n(r.wait_min).toFixed(0)}</td>
         <td>${n(r.prod_min).toFixed(0)}</td>
         <td>${pctHtml}</td>
-        <td style="text-align:center;">${delBtn}</td>
+        <td style="text-align:center;">${actionBtns}</td>
       </tr>`
     }).join('')
   }
@@ -1049,10 +1077,32 @@
     modalDelete.hidden = true
   }
 
+  function fillFormFromRow(id) {
+    const rec = allData.find(r => Number(r.id) === Number(id))
+    if (!rec) {
+      showFeedback('No se encontró el registro en el período actual.', 'error')
+      return
+    }
+    const fechaRaw = typeof rec.fecha === 'string' ? rec.fecha.split('T')[0] : ''
+    document.getElementById('f-fecha').value = fechaRaw
+    document.getElementById('f-linea').value = rec.linea
+    document.getElementById('f-exec').value = rec.exec_min != null ? String(rec.exec_min) : ''
+    document.getElementById('f-wait').value = rec.wait_min != null ? String(rec.wait_min) : ''
+    document.getElementById('f-prod').value = rec.prod_min != null ? String(rec.prod_min) : ''
+    updatePreview()
+    showFeedback('Datos cargados en el formulario. Ajusta lo que necesites y pulsa Guardar.', 'success')
+    document.getElementById('registro-form-section').scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   document.getElementById('table-body').addEventListener('click', e => {
-    const btn = e.target.closest('.btn-delete-row')
-    if (!btn || !btn.dataset.id) return
-    openDeleteModal(btn.dataset.id)
+    const editBtn = e.target.closest('.btn-edit-row')
+    if (editBtn?.dataset.id) {
+      fillFormFromRow(editBtn.dataset.id)
+      return
+    }
+    const delBtn = e.target.closest('.btn-delete-row')
+    if (!delBtn || !delBtn.dataset.id) return
+    openDeleteModal(delBtn.dataset.id)
   })
 
   modalDeleteCancel.addEventListener('click', closeDeleteModal)
