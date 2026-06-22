@@ -625,8 +625,13 @@
 </div>
 
 <script type="module">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-  import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js'
+  import { API_URL } from './config.js'
+  import {
+    fetchMonthDates,
+    fetchRegistros,
+    upsertRegistro,
+    softDeleteRegistro,
+  } from './db-client.js'
 
   // ── Constants ──────────────────────────────────────────────
   const META = 2.5
@@ -671,7 +676,7 @@
   let currentFilter = 'all'
   let allData = []
   let lineChart, barChart, donutChart
-  let supabase
+  let dbReady = false
 
   // ── DOM refs ──────────────────────────────────────────────
   const statusBar  = document.getElementById('status-bar')
@@ -686,25 +691,21 @@
   let pendingDeleteId = null
 
   // ── Boot ──────────────────────────────────────────────────
-  if (SUPABASE_URL === 'TU_URL_AQUI' || !SUPABASE_URL) {
-    showStatus('⚠️  Configura tus credenciales de Supabase en config.js antes de usar el dashboard.', 'error')
+  if (!API_URL) {
+    showStatus('⚠️  Configura API_URL en config.js antes de usar el dashboard.', 'error')
   } else {
     try {
-      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      dbReady = true
       initCharts()
       refreshMonthTabs().then(loadData)
     } catch (e) {
-      showStatus('Error al inicializar Supabase: ' + e.message, 'error')
+      showStatus('Error al inicializar la API: ' + e.message, 'error')
     }
   }
 
   // ── Tabs dinámicas ────────────────────────────────────────
   async function refreshMonthTabs() {
-    const { data, error } = await supabase
-      .from('registros_mantenimiento')
-      .select('fecha')
-      .is('deleted_at', null)
-      .order('fecha', { ascending: true })
+    const { data, error } = await fetchMonthDates()
 
     if (error || !data) return
 
@@ -734,14 +735,7 @@
     showStatus('Cargando datos...', 'loading')
     const range = getRange(currentFilter)
 
-    const { data, error } = await supabase
-      .from('registros_mantenimiento')
-      .select('*')
-      .is('deleted_at', null)
-      .gte('fecha', range.start)
-      .lte('fecha', range.end)
-      .order('fecha', { ascending: true })
-      .order('linea',  { ascending: true })
+    const { data, error } = await fetchRegistros(range.start, range.end)
 
     if (error) {
       showStatus('Error al cargar datos: ' + error.message, 'error')
@@ -1060,7 +1054,7 @@
   }
 
   function openDeleteModal(id) {
-    if (!supabase) return
+    if (!dbReady) return
     pendingDeleteId = id
     const rec = allData.find(r => Number(r.id) === Number(id))
     modalDeleteSummary.textContent = rec
@@ -1116,13 +1110,10 @@
   })
 
   modalDeleteConfirm.addEventListener('click', async () => {
-    if (pendingDeleteId == null || !supabase) return
+    if (pendingDeleteId == null || !dbReady) return
     modalDeleteConfirm.disabled = true
     modalDeleteConfirm.textContent = 'Eliminando…'
-    const { error } = await supabase
-      .from('registros_mantenimiento')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', pendingDeleteId)
+    const { error } = await softDeleteRegistro(pendingDeleteId)
 
     if (error) {
       modalDeleteConfirm.disabled = false
@@ -1171,12 +1162,13 @@
     btnSave.disabled    = true
     btnSave.textContent = 'Guardando...'
 
-    const { error } = await supabase
-      .from('registros_mantenimiento')
-      .upsert(
-        { fecha, linea, exec_min: execMin, wait_min: waitMin, prod_min: prodMin, deleted_at: null },
-        { onConflict: 'fecha,linea' }
-      )
+    const { error } = await upsertRegistro({
+      fecha,
+      linea,
+      exec_min: execMin,
+      wait_min: waitMin,
+      prod_min: prodMin,
+    })
 
     btnSave.disabled    = false
     btnSave.textContent = 'Guardar'

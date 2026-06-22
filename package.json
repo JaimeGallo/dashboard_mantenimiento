@@ -1,0 +1,17 @@
+{
+  "name": "dashboard-mantenimiento",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "export:supabase": "node scripts/export-from-supabase.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "express": "^4.21.2"
+  }
+}

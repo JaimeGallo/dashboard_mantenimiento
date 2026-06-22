@@ -1,7 +1,16 @@
 # NOTA: config.js SÍ se sube al repo porque GitHub Pages lo necesita.
-# La anon key de Supabase es pública por diseño y está protegida por RLS.
-# Si prefieres mantenerla privada, descomenta la línea siguiente:
-# config.js
+# API_URL es pública; la conexión a Neon vive solo en Vercel (DATABASE_URL).
+
+# Variables de entorno locales
+.env
+.env.local
+supabase-export.config.js
+
+# Exportaciones locales
+neon/export-import.sql
+
+# Dependencias
+node_modules/
 
 # Python y temporales
 __pycache__/
