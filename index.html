@@ -691,7 +691,8 @@
   let pendingDeleteId = null
 
   // ── Boot ──────────────────────────────────────────────────
-  if (!API_URL) {
+  // API_URL vacío ('') = mismo dominio (Render). Solo falla si queda el placeholder.
+  if (API_URL === 'TU_URL_AQUI') {
     showStatus('⚠️  Configura API_URL en config.js antes de usar el dashboard.', 'error')
   } else {
     try {
