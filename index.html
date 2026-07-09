@@ -720,7 +720,7 @@
 
     if (error || !data) return
 
-    const months = [...new Set(data.map(r => r.fecha.slice(0, 7)))].sort()
+    const months = [...new Set(data.map(r => fechaYmd(r.fecha).slice(0, 7)))].sort()
     const container = document.getElementById('filter-tabs')
     let html = `<button class="tab ${currentFilter === 'all' ? 'active' : ''}" data-filter="all" role="tab">Todos</button>`
     for (const ym of months) {
@@ -754,7 +754,7 @@
     }
 
     hideStatus()
-    allData = data || []
+    allData = (data || []).map(r => ({ ...r, fecha: fechaYmd(r.fecha) }))
     updateKPIs(allData)
     updateCharts(allData)
     renderTable(allData)
@@ -1091,8 +1091,7 @@
       showFeedback('No se encontró el registro en el período actual.', 'error')
       return
     }
-    const fechaRaw = typeof rec.fecha === 'string' ? rec.fecha.split('T')[0] : ''
-    document.getElementById('f-fecha').value = fechaRaw
+    document.getElementById('f-fecha').value = fechaYmd(rec.fecha)
     document.getElementById('f-linea').value = rec.linea
     document.getElementById('f-exec').value = rec.exec_min != null ? String(rec.exec_min) : ''
     document.getElementById('f-wait').value = rec.wait_min != null ? String(rec.wait_min) : ''
@@ -1214,7 +1213,7 @@
     )
     const headers = ['Fecha', 'Línea', 'Ejecución_min', 'Espera_min', 'Producción_min', 'Pct_Mto']
     const csvRows = sorted.map(r => [
-      r.fecha,
+      fmtDate(r.fecha),
       `"${r.linea}"`,
       n(r.exec_min).toFixed(2),
       n(r.wait_min).toFixed(2),
@@ -1573,7 +1572,7 @@
       for (const row of sorted) {
         const xr = ws2.getRow(rr)
         const pct = row.pct_mto != null ? +row.pct_mto : null
-        xr.getCell(1).value = new Date(row.fecha + 'T12:00:00')
+        xr.getCell(1).value = new Date(fechaYmd(row.fecha) + 'T12:00:00')
         xr.getCell(1).numFmt = 'dd/mm/yyyy'
         xr.getCell(2).value = row.linea
         xr.getCell(3).value = n(row.exec_min)
@@ -1624,9 +1623,20 @@
     }, {})
   }
 
+  function fechaYmd(d) {
+    if (!d) return ''
+    if (typeof d === 'string') {
+      const m = d.match(/^(\d{4}-\d{2}-\d{2})/)
+      return m ? m[1] : d.split('T')[0]
+    }
+    if (d instanceof Date) return d.toISOString().slice(0, 10)
+    return String(d)
+  }
+
   function fmtDate(d) {
-    if (!d) return '—'
-    const [y, m, day] = d.split('-')
+    const ymd = fechaYmd(d)
+    if (!ymd) return '—'
+    const [y, m, day] = ymd.split('-')
     return `${day}/${m}/${y}`
   }
 
