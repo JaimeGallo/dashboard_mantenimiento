@@ -501,7 +501,7 @@
     <div class="kpi-card neutral">
       <div class="kpi-label">% Tiempo total<br>mantenimiento</div>
       <div class="kpi-value neutral" id="kpi-tiempo-total-mto">—</div>
-      <div class="kpi-sub" id="kpi-tiempo-total-mto-sub">exec + espera / producción total</div>
+      <div class="kpi-sub" id="kpi-tiempo-total-mto-sub">Bando + Recubiertos (ficha fila 15)</div>
     </div>
   </div>
 
@@ -636,6 +636,16 @@
   // ── Constants ──────────────────────────────────────────────
   const META = 2.5
   const LINES = ['Prensas Automáticas Bando', 'Recubiertos', 'Prensas Manuales']
+  const LINES_PCT_TOTAL_MTO = ['Prensas Automáticas Bando', 'Recubiertos']
+
+  // Ficha indicador mantenimiento diario: filas 10-12 (Bando+Recub) → % fila 15
+  function calcPctTotalMto(data) {
+    const rows = data.filter(r => LINES_PCT_TOTAL_MTO.includes(r.linea))
+    if (!rows.length) return null
+    const totalEW = rows.reduce((s, r) => s + n(r.exec_min) + n(r.wait_min), 0)
+    const totalProd = rows.reduce((s, r) => s + n(r.prod_min), 0)
+    return totalProd > 0 ? totalEW / totalProd * 100 : null
+  }
   const LINE_KEY = {
     'Prensas Automáticas Bando': 'bando',
     'Recubiertos': 'recub',
@@ -817,19 +827,22 @@
     const totalMin = data.reduce((s, r) => s + n(r.exec_min) + n(r.wait_min), 0)
     document.getElementById('kpi-horas').textContent = (totalMin / 60).toFixed(1) + ' h'
 
-    // % Tiempo total mantenimiento (equivalente a fila 15 «Indicadores mantenimiento»: global)
+    // % Tiempo total mantenimiento — ficha indicador fila 15 (Bando + Recubiertos)
     const elTotMto = document.getElementById('kpi-tiempo-total-mto')
     const subTotMto = document.getElementById('kpi-tiempo-total-mto-sub')
-    const totProdGlobal = data.reduce((s, r) => s + n(r.prod_min), 0)
-    const pctGlobalMto = totProdGlobal > 0 ? totalMin / totProdGlobal * 100 : null
-    if (pctGlobalMto === null || !data.length) {
+    const dataTotMto = data.filter(r => LINES_PCT_TOTAL_MTO.includes(r.linea))
+    const pctGlobalMto = calcPctTotalMto(data)
+    const periodLbl = currentFilter === 'all'
+      ? 'todos los meses'
+      : (MONTH_NAMES[String(currentFilter).padStart(2, '0')] || currentFilter)
+    if (pctGlobalMto === null || !dataTotMto.length) {
       elTotMto.textContent = '—'
       elTotMto.className = 'kpi-value neutral'
-      subTotMto.textContent = data.length ? 'sin producción registrada' : 'sin datos'
+      subTotMto.textContent = dataTotMto.length ? 'sin producción registrada' : 'sin datos'
     } else {
       elTotMto.textContent = pctGlobalMto.toFixed(2) + '%'
       elTotMto.className = `kpi-value ${pctGlobalMto > META ? 'bad' : 'good'}`
-      subTotMto.textContent = 'exec + espera / producción total'
+      subTotMto.textContent = `ficha fila 15 · ${periodLbl}`
     }
   }
 
@@ -1243,7 +1256,12 @@
   const XL_LBL_MAN_P = 'Tiempo de produccion Prensas Manuales Aglomerados'
   const XL_LBL_PCT_B = '%Tiempo total mantenimiento Prensas Automaticas Bando Aglomerados'
   const XL_LBL_PCT_R = '%Tiempo total mantenimiento Recubiertos'
+  const XL_LBL_PCT_G = '%Tiempo total mantenimiento '
   const XL_LBL_PCT_M = '%Tiempo total mantenimiento Prensas Manuales Aglomerados'
+  const XL_LBL_TOT_W = 'Tiempo total de espera mantenimento '
+  const XL_LBL_TOT_E = 'Tiempo total de ejecucion mantenimento '
+  const XL_LBL_TOT_P = 'Tiempo total de produccion'
+  const XL_FILL_TOT = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
   const XL_LBL_JUST = 'JUSTIFICACION DE PAROS PRENSAS BANDO AGLOMERADOS - RECUBIERTOS - PRENSAS MANUALES AGLOMERADOS'
 
   function colToLetter(col1) {
@@ -1304,8 +1322,14 @@
       const LM = 'Prensas Manuales'
 
       const year = (range.start || '2026').slice(0, 4)
-      const lastCol = 1 + dates.length
+      const firstDayCol = 2
+      const lastDayCol = 1 + dates.length
+      const totalCol = lastDayCol + 1
+      const lastCol = totalCol
       const lastLet = colToLetter(lastCol)
+      const firstDayLet = colToLetter(firstDayCol)
+      const lastDayLet = colToLetter(lastDayCol)
+      const totalLet = colToLetter(totalCol)
 
       const ws = wb.addWorksheet('Hoja1', {
         views: [{ state: 'frozen', xSplit: 1, ySplit: 4, topLeftCell: 'B5', activeCell: 'B5' }]
@@ -1341,6 +1365,14 @@
         c.alignment = { horizontal: 'center' }
         c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
       })
+      {
+        const c = r3.getCell(totalCol)
+        c.value = 'TOTAL'
+        c.font = { bold: true, size: 9, name: 'Calibri' }
+        c.fill = XL_FILL_DAYHDR
+        c.alignment = { horizontal: 'center' }
+        c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+      }
       r3.height = 16
 
       const r4 = ws.getRow(4)
@@ -1355,12 +1387,43 @@
         c.alignment = { horizontal: 'center' }
         c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
       })
+      r4.getCell(totalCol).fill = XL_FILL_DAYHDR
+      r4.getCell(totalCol).border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
       r4.height = 14
 
       const R_BE = 5, R_BW = 6, R_BP = 7
       const R_RW = 8, R_RE = 9, R_RP = 10
-      const R_ME = 11, R_MW = 12, R_MP = 13
-      const R_PCTB = 14, R_PCTR = 15, R_PCTM = 16
+      const R_TW = 11, R_TE = 12, R_TP = 13
+      const R_PCTB = 14, R_PCTR = 15, R_PCTG = 16
+      const R_NOTE = 17
+      const R_ME = 18, R_MW = 19, R_MP = 20
+      const R_PCTM = 21
+
+      function styleDataRow(row, label, fill) {
+        const a = row.getCell(1)
+        a.value = label
+        a.font = { bold: true, size: 9, name: 'Calibri' }
+        a.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+        a.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        row.height = 22
+        dates.forEach((iso, i) => {
+          const c = row.getCell(2 + i)
+          c.numFmt = '0.0'
+          c.alignment = { horizontal: 'right' }
+          c.fill = fill
+          c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        })
+        const tc = row.getCell(totalCol)
+        tc.numFmt = '0.0'
+        tc.alignment = { horizontal: 'right' }
+        tc.fill = fill
+        tc.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+      }
+
+      function setDaySumFormula(rowNum) {
+        const row = ws.getRow(rowNum)
+        row.getCell(totalCol).value = { formula: `SUM(${firstDayLet}${rowNum}:${lastDayLet}${rowNum})` }
+      }
 
       const blockRows = [
         { r: R_BE, label: XL_LBL_BANDO, line: LB, field: 'exec_min', fill: XL_FILL_BANDO },
@@ -1368,36 +1431,41 @@
         { r: R_BP, label: XL_LBL_BANDO_P, line: LB, field: 'prod_min', fill: XL_FILL_BANDO },
         { r: R_RW, label: XL_LBL_REC_W, line: LR, field: 'wait_min', fill: XL_FILL_RECUB },
         { r: R_RE, label: XL_LBL_REC_E, line: LR, field: 'exec_min', fill: XL_FILL_RECUB },
-        { r: R_RP, label: XL_LBL_REC_P, line: LR, field: 'prod_min', fill: XL_FILL_RECUB },
-        { r: R_ME, label: XL_LBL_MAN_E, line: LM, field: 'exec_min', fill: XL_FILL_MAN },
-        { r: R_MW, label: XL_LBL_MAN_W, line: LM, field: 'wait_min', fill: XL_FILL_MAN },
-        { r: R_MP, label: XL_LBL_MAN_P, line: LM, field: 'prod_min', fill: XL_FILL_MAN }
+        { r: R_RP, label: XL_LBL_REC_P, line: LR, field: 'prod_min', fill: XL_FILL_RECUB }
       ]
 
       for (const br of blockRows) {
         const row = ws.getRow(br.r)
-        const a = row.getCell(1)
-        a.value = br.label
-        a.font = { bold: true, size: 9, name: 'Calibri' }
-        a.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
-        a.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        styleDataRow(row, br.label, br.fill)
         dates.forEach((iso, i) => {
           const rec = lookup[`${iso}\t${br.line}`]
           const c = row.getCell(2 + i)
           if (rec) c.value = n(rec[br.field])
           else c.value = null
-          c.numFmt = '0.0'
-          c.alignment = { horizontal: 'right' }
-          c.fill = br.fill
-          c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
         })
-        row.height = 22
+        setDaySumFormula(br.r)
+      }
+
+      const totalRows = [
+        { r: R_TW, label: XL_LBL_TOT_W, a: R_BW, b: R_RW },
+        { r: R_TE, label: XL_LBL_TOT_E, a: R_BE, b: R_RE },
+        { r: R_TP, label: XL_LBL_TOT_P, a: R_BP, b: R_RP }
+      ]
+      for (const tr of totalRows) {
+        const row = ws.getRow(tr.r)
+        styleDataRow(row, tr.label, XL_FILL_TOT)
+        dates.forEach((_, i) => {
+          const L = colToLetter(2 + i)
+          const c = row.getCell(2 + i)
+          c.value = { formula: `${L}${tr.a}+${L}${tr.b}` }
+        })
+        setDaySumFormula(tr.r)
       }
 
       const pctSpec = [
         { r: R_PCTB, label: XL_LBL_PCT_B, e: R_BE, w: R_BW, p: R_BP, fill: XL_FILL_BANDO },
         { r: R_PCTR, label: XL_LBL_PCT_R, e: R_RE, w: R_RW, p: R_RP, fill: XL_FILL_RECUB },
-        { r: R_PCTM, label: XL_LBL_PCT_M, e: R_ME, w: R_MW, p: R_MP, fill: XL_FILL_MAN }
+        { r: R_PCTG, label: XL_LBL_PCT_G, e: R_TE, w: R_TW, p: R_TP, fill: XL_FILL_TOT, global: true }
       ]
       for (const pr of pctSpec) {
         const row = ws.getRow(pr.r)
@@ -1409,16 +1477,72 @@
         dates.forEach((_, i) => {
           const L = colToLetter(2 + i)
           const c = row.getCell(2 + i)
-          c.value = { formula: `IF(${L}${pr.p}=0,"",(${L}${pr.e}+${L}${pr.w})/${L}${pr.p})` }
+          if (pr.global) {
+            c.value = { formula: `IF(${L}${pr.p}=0,"",(${L}${pr.w}+${L}${pr.e})/${L}${pr.p})` }
+          } else {
+            c.value = { formula: `IF(${L}${pr.p}=0,"",(${L}${pr.e}+${L}${pr.w})/${L}${pr.p})` }
+          }
           c.numFmt = '0.0%'
           c.alignment = { horizontal: 'center' }
           c.fill = pr.fill
           c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
         })
+        const tc = row.getCell(totalCol)
+        if (pr.global) {
+          tc.value = { formula: `IF(${totalLet}${R_TP}=0,"",(${totalLet}${R_TW}+${totalLet}${R_TE})/${totalLet}${R_TP})` }
+        } else {
+          tc.value = { formula: `IF(${totalLet}${pr.p}=0,"",(${totalLet}${pr.e}+${totalLet}${pr.w})/${totalLet}${pr.p})` }
+        }
+        tc.numFmt = '0.0%'
+        tc.alignment = { horizontal: 'center' }
+        tc.fill = pr.fill
+        tc.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
         row.height = 22
       }
 
-      const noteRow = 18
+      const manRows = [
+        { r: R_ME, label: XL_LBL_MAN_E, line: LM, field: 'exec_min', fill: XL_FILL_MAN },
+        { r: R_MW, label: XL_LBL_MAN_W, line: LM, field: 'wait_min', fill: XL_FILL_MAN },
+        { r: R_MP, label: XL_LBL_MAN_P, line: LM, field: 'prod_min', fill: XL_FILL_MAN }
+      ]
+      for (const br of manRows) {
+        const row = ws.getRow(br.r)
+        styleDataRow(row, br.label, br.fill)
+        dates.forEach((iso, i) => {
+          const rec = lookup[`${iso}\t${br.line}`]
+          const c = row.getCell(2 + i)
+          if (rec) c.value = n(rec[br.field])
+          else c.value = null
+        })
+        setDaySumFormula(br.r)
+      }
+
+      {
+        const row = ws.getRow(R_PCTM)
+        const a = row.getCell(1)
+        a.value = XL_LBL_PCT_M
+        a.font = { bold: true, size: 9, name: 'Calibri' }
+        a.alignment = { vertical: 'middle', wrapText: true }
+        a.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        dates.forEach((_, i) => {
+          const L = colToLetter(2 + i)
+          const c = row.getCell(2 + i)
+          c.value = { formula: `IF(${L}${R_MP}=0,"",(${L}${R_ME}+${L}${R_MW})/${L}${R_MP})` }
+          c.numFmt = '0.0%'
+          c.alignment = { horizontal: 'center' }
+          c.fill = XL_FILL_MAN
+          c.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        })
+        const tc = row.getCell(totalCol)
+        tc.value = { formula: `IF(${totalLet}${R_MP}=0,"",(${totalLet}${R_ME}+${totalLet}${R_MW})/${totalLet}${R_MP})` }
+        tc.numFmt = '0.0%'
+        tc.alignment = { horizontal: 'center' }
+        tc.fill = XL_FILL_MAN
+        tc.border = { top: XL_BORDER, left: XL_BORDER, bottom: XL_BORDER, right: XL_BORDER }
+        row.height = 22
+      }
+
+      const noteRow = R_NOTE
       ws.mergeCells(`A${noteRow}:${lastLet}${noteRow}`)
       const ncell = ws.getCell(`A${noteRow}`)
       ncell.value = XL_LBL_JUST
